@@ -2,11 +2,16 @@
 """BloomArtPixel DPI Fixer — sets images to 300 DPI (PNG/JPG/JPEG/TIF/TIFF)"""
 
 import os
+import sys
 import subprocess
 import threading
 import tkinter as tk
 from tkinter import ttk
 from tkinterdnd2 import DND_FILES, TkinterDnD
+from PIL import Image
+
+IS_WINDOWS = sys.platform.startswith("win")
+IS_MAC = sys.platform == "darwin"
 
 # ---- Claude-inspired theme ----
 BG        = "#F5F1EC"   # warm cream background
@@ -19,7 +24,7 @@ TEXT_GRAY = "#8A8577"
 BORDER    = "#D9D3C7"
 
 EXTENSIONS = (".png", ".jpg", ".jpeg", ".tif", ".tiff")
-DONE_SOUND = "/System/Library/Sounds/Glass.aiff"
+DONE_SOUND = "/System/Library/Sounds/Glass.aiff"  # macOS only
 
 
 class RoundButton(tk.Canvas):
@@ -30,7 +35,7 @@ class RoundButton(tk.Canvas):
                  bg=BG, fill=ACCENT, fill_hover=ACCENT_HV,
                  fg="white", font=("Helvetica Neue", 12, "bold")):
         super().__init__(parent, width=width, height=height, bg=bg,
-                          highlightthickness=0, cursor="pointinghand")
+                          highlightthickness=0, cursor="pointinghand" if not IS_WINDOWS else "hand2")
         self.command = command
         self.width = width
         self.height = height
@@ -73,7 +78,7 @@ class RoundButton(tk.Canvas):
             self._draw(ACCENT_DISABLED)
         else:
             self.enabled = True
-            self.config(cursor="pointinghand")
+            self.config(cursor="pointinghand" if not IS_WINDOWS else "hand2")
             self._draw(self.fill)
 
 
@@ -168,14 +173,26 @@ class DPIFixerApp:
         done = 0
         for f in files:
             full_path = os.path.join(folder, f)
-            subprocess.run(
-                ["sips", "-s", "dpiHeight", "300", "-s", "dpiWidth", "300", full_path],
-                stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL
-            )
+            self._set_dpi(full_path)
             done += 1
             self.root.after(0, self._update_progress, done, total)
 
         self.root.after(0, self._finish, done)
+
+    def _set_dpi(self, full_path):
+        """Set an image's DPI to 300x300. Uses macOS 'sips' on macOS,
+        and Pillow (cross-platform) everywhere else, including Windows."""
+        if IS_MAC:
+            subprocess.run(
+                ["sips", "-s", "dpiHeight", "300", "-s", "dpiWidth", "300", full_path],
+                stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL
+            )
+        else:
+            try:
+                img = Image.open(full_path)
+                img.save(full_path, dpi=(300, 300))
+            except Exception:
+                pass
 
     def _update_progress(self, done, total):
         self.progress.config(value=done)
@@ -191,7 +208,11 @@ class DPIFixerApp:
 
     def _play_done_sound(self):
         try:
-            subprocess.Popen(["afplay", DONE_SOUND])
+            if IS_MAC:
+                subprocess.Popen(["afplay", DONE_SOUND])
+            elif IS_WINDOWS:
+                import winsound
+                winsound.MessageBeep(winsound.MB_ICONASTERISK)
         except Exception:
             pass
 

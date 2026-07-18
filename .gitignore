@@ -1,0 +1,10 @@
+venv/
+__pycache__/
+*.pyc
+.DS_Store
+build/
+dist/
+*.app
+*.dmg
+*.spec
+dmg-source/
